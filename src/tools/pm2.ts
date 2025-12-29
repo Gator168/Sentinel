@@ -8,6 +8,8 @@
  * - pm2_restart: 重启进程
  * - pm2_delete: 删除进程
  * - pm2_logs: 获取日志
+ *
+ * 注意：认证已在 HTTP 中间件层完成，工具层不再需要验证 token
  */
 
 import pm2 from "pm2";
@@ -15,7 +17,7 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { validateToken, createAuthError, getAllowedPaths } from "../auth.js";
+import { getAllowedPaths } from "../auth.js";
 import { validatePathSandbox } from "../utils/validator.js";
 
 const execAsync = promisify(exec);
@@ -89,19 +91,8 @@ export function registerPm2Tools(server: McpServer): void {
   server.tool(
     "pm2_list",
     "列出所有 PM2 进程",
-    {
-      token: z.string().describe("认证令牌"),
-    },
-    async ({ token }) => {
-      if (!validateToken(token)) {
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(createAuthError()) },
-          ],
-          isError: true,
-        };
-      }
-
+    {},
+    async () => {
       try {
         await connectPm2();
 
@@ -146,7 +137,6 @@ export function registerPm2Tools(server: McpServer): void {
     "pm2_start",
     "创建并启动一个新的 PM2 进程",
     {
-      token: z.string().describe("认证令牌"),
       name: z.string().describe("任务名称"),
       script: z.string().describe("脚本路径"),
       cwd: z.string().describe("工作目录"),
@@ -162,16 +152,7 @@ export function registerPm2Tools(server: McpServer): void {
         .default(false)
         .describe("是否自动重启，默认 false"),
     },
-    async ({ token, name, script, cwd, interpreter, args, env, autorestart }) => {
-      if (!validateToken(token)) {
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(createAuthError()) },
-          ],
-          isError: true,
-        };
-      }
-
+    async ({ name, script, cwd, interpreter, args, env, autorestart }) => {
       // 验证 cwd 路径
       const allowedPaths = getAllowedPaths();
       const cwdValidation = validatePathSandbox(cwd, allowedPaths);
@@ -240,19 +221,9 @@ export function registerPm2Tools(server: McpServer): void {
     "pm2_stop",
     "停止一个 PM2 进程",
     {
-      token: z.string().describe("认证令牌"),
       name: z.string().describe("进程名称或 ID"),
     },
-    async ({ token, name }) => {
-      if (!validateToken(token)) {
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(createAuthError()) },
-          ],
-          isError: true,
-        };
-      }
-
+    async ({ name }) => {
       try {
         await connectPm2();
 
@@ -296,19 +267,9 @@ export function registerPm2Tools(server: McpServer): void {
     "pm2_restart",
     "重启一个 PM2 进程",
     {
-      token: z.string().describe("认证令牌"),
       name: z.string().describe("进程名称或 ID"),
     },
-    async ({ token, name }) => {
-      if (!validateToken(token)) {
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(createAuthError()) },
-          ],
-          isError: true,
-        };
-      }
-
+    async ({ name }) => {
       try {
         await connectPm2();
 
@@ -352,19 +313,9 @@ export function registerPm2Tools(server: McpServer): void {
     "pm2_delete",
     "删除一个 PM2 进程",
     {
-      token: z.string().describe("认证令牌"),
       name: z.string().describe("进程名称或 ID"),
     },
-    async ({ token, name }) => {
-      if (!validateToken(token)) {
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(createAuthError()) },
-          ],
-          isError: true,
-        };
-      }
-
+    async ({ name }) => {
       try {
         await connectPm2();
 
@@ -408,7 +359,6 @@ export function registerPm2Tools(server: McpServer): void {
     "pm2_logs",
     "获取 PM2 进程日志（最近 N 行）",
     {
-      token: z.string().describe("认证令牌"),
       name: z.string().describe("进程名称或 ID"),
       lines: z
         .number()
@@ -421,16 +371,7 @@ export function registerPm2Tools(server: McpServer): void {
         .default("all")
         .describe("日志类型：out（标准输出）、err（错误输出）、all（全部）"),
     },
-    async ({ token, name, lines = 50, type = "all" }) => {
-      if (!validateToken(token)) {
-        return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(createAuthError()) },
-          ],
-          isError: true,
-        };
-      }
-
+    async ({ name, lines = 50, type = "all" }) => {
       try {
         // 使用 pm2 logs 命令获取日志（--nostream 模式）
         // PM2 API 不直接支持获取历史日志，需要通过命令行

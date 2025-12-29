@@ -4,15 +4,37 @@
  * 使用 HTTP + SSE 传输协议，提供远程 PM2 和 Shell 管理能力
  */
 
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import { loadConfig, getAllowedPaths } from "./auth.js";
+import { loadConfig, getAllowedPaths, validateToken } from "./auth.js";
 import { registerPm2Tools, disconnectPm2 } from "./tools/pm2.js";
 import { registerShellTools } from "./tools/shell.js";
 
 // 加载配置（会验证环境变量）
 const config = loadConfig();
+
+/**
+ * Bearer Token 认证中间件
+ * 验证 Authorization 头部的 Bearer token
+ */
+function authMiddleware(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Missing or invalid Authorization header" });
+    return;
+  }
+
+  const token = authHeader.slice(7); // 移除 "Bearer " 前缀
+
+  if (!validateToken(token)) {
+    res.status(401).json({ error: "Invalid token" });
+    return;
+  }
+
+  next();
+}
 
 /**
  * 创建新的 MCP Server 实例
@@ -134,7 +156,7 @@ const transports = new Map<string, SSEServerTransport>();
  * SSE 连接端点
  * 客户端通过 GET /sse 建立 SSE 连接
  */
-app.get("/sse", async (req, res) => {
+app.get("/sse", authMiddleware, async (req, res) => {
   console.log("[SSE] New connection request");
 
   // 创建 SSE Transport（transport.start() 会自动设置正确的 SSE headers）
@@ -178,7 +200,7 @@ app.get("/sse", async (req, res) => {
  * 消息接收端点
  * 客户端通过 POST /message 发送 MCP 消息
  */
-app.post("/message", async (req, res) => {
+app.post("/message", authMiddleware, async (req, res) => {
   const sessionId = req.query.sessionId as string;
   console.log(`[Message] POST received for session: ${sessionId}`);
   console.log(`[Message] Body:`, JSON.stringify(req.body).slice(0, 300));

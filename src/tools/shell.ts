@@ -2,6 +2,8 @@
  * Shell 命令执行工具
  *
  * 提供受限的 Shell 命令执行能力
+ *
+ * 注意：认证已在 HTTP 中间件层完成，工具层不再需要验证 token
  */
 
 import { exec } from "node:child_process";
@@ -12,40 +14,18 @@ import {
   validateShellCommand,
   getAllowedCommands,
 } from "../utils/validator.js";
-import { validateToken, createAuthError, getAllowedPaths } from "../auth.js";
+import { getAllowedPaths } from "../auth.js";
 
 const execAsync = promisify(exec);
-
-// 输入参数 Schema
-const ShellExecInputSchema = z.object({
-  token: z.string().describe("认证令牌"),
-  command: z.string().describe("要执行的命令"),
-  cwd: z
-    .string()
-    .optional()
-    .describe("工作目录（可选，必须在允许的路径内）"),
-});
-
-type ShellExecInput = z.infer<typeof ShellExecInputSchema>;
 
 /**
  * shell_exec 工具处理函数
  */
-async function shellExecHandler(args: ShellExecInput) {
-  const { token, command, cwd } = args;
-
-  // 1. Token 认证
-  if (!validateToken(token)) {
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(createAuthError()) }],
-      isError: true,
-    };
-  }
-
-  // 2. 获取允许的路径
+async function shellExecHandler({ command, cwd }: { command: string; cwd?: string }) {
+  // 获取允许的路径
   const allowedPaths = getAllowedPaths();
 
-  // 3. 验证命令
+  // 验证命令
   const validation = validateShellCommand(command, allowedPaths, cwd);
   if (!validation.valid) {
     return {
@@ -59,7 +39,7 @@ async function shellExecHandler(args: ShellExecInput) {
     };
   }
 
-  // 4. 执行命令
+  // 执行命令
   try {
     const options: { cwd?: string; timeout: number; maxBuffer: number } = {
       timeout: 30000, // 30 秒超时
@@ -125,7 +105,6 @@ export function registerShellTools(server: McpServer): void {
 - 禁止命令替换 $() 或反引号
 - 路径必须在 SENTINEL_ALLOWED_PATHS 范围内`,
     {
-      token: z.string().describe("认证令牌"),
       command: z.string().describe("要执行的命令"),
       cwd: z
         .string()
