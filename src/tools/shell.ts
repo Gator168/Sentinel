@@ -15,6 +15,7 @@ import {
   getAllowedCommands,
 } from "../utils/validator.js";
 import { getAllowedPaths } from "../auth.js";
+import { successResponse, errorResponse } from "../utils/formatter.js";
 
 const execAsync = promisify(exec);
 
@@ -28,15 +29,8 @@ async function shellExecHandler({ command, cwd }: { command: string; cwd?: strin
   // 验证命令
   const validation = validateShellCommand(command, allowedPaths, cwd);
   if (!validation.valid) {
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({ error: validation.error, code: 400 }),
-        },
-      ],
-      isError: true,
-    };
+    const allowedCmds = getAllowedCommands().join(", ");
+    return errorResponse(`${validation.error}\n\n允许的命令: ${allowedCmds}`);
   }
 
   // 执行命令
@@ -52,39 +46,40 @@ async function shellExecHandler({ command, cwd }: { command: string; cwd?: strin
 
     const { stdout, stderr } = await execAsync(command, options);
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            success: true,
-            stdout: stdout.trim(),
-            stderr: stderr.trim() || undefined,
-          }),
-        },
-      ],
-    };
+    // 构建输出
+    const parts: string[] = [`$ ${command}`, ""];
+
+    if (stdout.trim()) {
+      parts.push(stdout.trim());
+    }
+
+    if (stderr.trim()) {
+      parts.push("", "[stderr]", stderr.trim());
+    }
+
+    if (!stdout.trim() && !stderr.trim()) {
+      parts.push("(命令执行成功，无输出)");
+    }
+
+    return successResponse(parts.join("\n"));
   } catch (error) {
     const err = error as Error & {
       code?: string;
       stdout?: string;
       stderr?: string;
     };
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            success: false,
-            error: err.message,
-            code: err.code,
-            stdout: err.stdout?.trim(),
-            stderr: err.stderr?.trim(),
-          }),
-        },
-      ],
-      isError: true,
-    };
+
+    const parts: string[] = [`$ ${command}`, "", `命令执行失败: ${err.message}`];
+
+    if (err.stdout?.trim()) {
+      parts.push("", "[stdout]", err.stdout.trim());
+    }
+
+    if (err.stderr?.trim()) {
+      parts.push("", "[stderr]", err.stderr.trim());
+    }
+
+    return errorResponse(parts.join("\n"));
   }
 }
 

@@ -19,6 +19,12 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getAllowedPaths } from "../auth.js";
 import { validatePathSandbox } from "../utils/validator.js";
+import {
+  formatProcessTable,
+  successResponse,
+  errorResponse,
+  type ProcessInfo,
+} from "../utils/formatter.js";
 
 const execAsync = promisify(exec);
 
@@ -55,16 +61,7 @@ export function disconnectPm2(): void {
   }
 }
 
-// 进程信息简化接口
-interface ProcessInfo {
-  name: string;
-  pm_id: number;
-  status: string;
-  cpu: number;
-  memory: number;
-  uptime: number | null;
-  restarts: number;
-}
+// 使用从 formatter.js 导入的 ProcessInfo 类型
 
 /**
  * 格式化进程信息
@@ -106,28 +103,9 @@ export function registerPm2Tools(server: McpServer): void {
         );
 
         const processes = list.map(formatProcessInfo);
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ success: true, processes }),
-            },
-          ],
-        };
+        return successResponse(formatProcessTable(processes));
       } catch (error) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                success: false,
-                error: (error as Error).message,
-              }),
-            },
-          ],
-          isError: true,
-        };
+        return errorResponse((error as Error).message);
       }
     }
   );
@@ -157,15 +135,7 @@ export function registerPm2Tools(server: McpServer): void {
       const allowedPaths = getAllowedPaths();
       const cwdValidation = validatePathSandbox(cwd, allowedPaths);
       if (!cwdValidation.valid) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ error: cwdValidation.error, code: 400 }),
-            },
-          ],
-          isError: true,
-        };
+        return errorResponse(cwdValidation.error || "路径验证失败");
       }
 
       try {
@@ -188,30 +158,21 @@ export function registerPm2Tools(server: McpServer): void {
           });
         });
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                success: true,
-                message: `Process '${name}' started`,
-              }),
-            },
-          ],
-        };
+        const details = [
+          `进程 '${name}' 已启动`,
+          "",
+          `脚本: ${script}`,
+          `工作目录: ${cwd}`,
+          interpreter ? `解释器: ${interpreter}` : null,
+          args?.length ? `参数: ${args.join(" ")}` : null,
+          `自动重启: ${autorestart ? "是" : "否"}`,
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+        return successResponse(details);
       } catch (error) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                success: false,
-                error: (error as Error).message,
-              }),
-            },
-          ],
-          isError: true,
-        };
+        return errorResponse((error as Error).message);
       }
     }
   );
@@ -234,30 +195,9 @@ export function registerPm2Tools(server: McpServer): void {
           });
         });
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                success: true,
-                message: `Process '${name}' stopped`,
-              }),
-            },
-          ],
-        };
+        return successResponse(`进程 '${name}' 已停止`);
       } catch (error) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                success: false,
-                error: (error as Error).message,
-              }),
-            },
-          ],
-          isError: true,
-        };
+        return errorResponse((error as Error).message);
       }
     }
   );
@@ -280,30 +220,9 @@ export function registerPm2Tools(server: McpServer): void {
           });
         });
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                success: true,
-                message: `Process '${name}' restarted`,
-              }),
-            },
-          ],
-        };
+        return successResponse(`进程 '${name}' 已重启`);
       } catch (error) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                success: false,
-                error: (error as Error).message,
-              }),
-            },
-          ],
-          isError: true,
-        };
+        return errorResponse((error as Error).message);
       }
     }
   );
@@ -326,30 +245,9 @@ export function registerPm2Tools(server: McpServer): void {
           });
         });
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                success: true,
-                message: `Process '${name}' deleted`,
-              }),
-            },
-          ],
-        };
+        return successResponse(`进程 '${name}' 已删除`);
       } catch (error) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                success: false,
-                error: (error as Error).message,
-              }),
-            },
-          ],
-          isError: true,
-        };
+        return errorResponse((error as Error).message);
       }
     }
   );
@@ -378,36 +276,20 @@ export function registerPm2Tools(server: McpServer): void {
         const logType = type === "all" ? "" : type === "out" ? "--out" : "--err";
         const cmd = `pm2 logs ${name} --nostream --lines ${lines} ${logType}`.trim();
 
-        const { stdout, stderr } = await execAsync(cmd, {
+        const { stdout } = await execAsync(cmd, {
           timeout: 10000,
           maxBuffer: 1024 * 1024,
         });
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                success: true,
-                logs: stdout.trim(),
-                stderr: stderr.trim() || undefined,
-              }),
-            },
-          ],
-        };
+        const logContent = stdout.trim();
+        if (!logContent) {
+          return successResponse(`进程 '${name}' 暂无日志`);
+        }
+
+        const header = `进程 '${name}' 的最近 ${lines} 行日志：\n\n`;
+        return successResponse(header + logContent);
       } catch (error) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                success: false,
-                error: (error as Error).message,
-              }),
-            },
-          ],
-          isError: true,
-        };
+        return errorResponse((error as Error).message);
       }
     }
   );
