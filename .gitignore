@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# PM2
+.pm2/
+
+# Test files
+test_script.py
+__pycache__/
+*.pyc
+
+# Runtime
+*.pid
+
+# Claude Code
+.claude/
+.mcp.json
