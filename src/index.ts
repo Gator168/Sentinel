@@ -10,6 +10,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { loadConfig, getAllowedPaths, validateToken } from "./auth.js";
 import { registerPm2Tools, disconnectPm2 } from "./tools/pm2.js";
 import { registerShellTools } from "./tools/shell.js";
+import { registerGpuTools } from "./tools/gpu.js";
 
 // 加载配置（会验证环境变量）
 const config = loadConfig();
@@ -49,6 +50,7 @@ function createMcpServer(): McpServer {
   // 注册所有工具
   registerPm2Tools(server);
   registerShellTools(server);
+  registerGpuTools(server);
 
   return server;
 }
@@ -265,7 +267,11 @@ Available tools:
   - pm2_restart   重启进程
   - pm2_delete    删除进程
   - pm2_logs      获取日志
+  - pm2_grep      搜索日志
+  - pm2_health    健康检查
+  - pm2_metrics   提取指标
   - shell_exec    执行受限命令
+  - gpu_status    获取 GPU 状态
 `);
 });
 

@@ -21,7 +21,56 @@ const ALLOWED_COMMANDS = new Set([
   "free",
   "nvidia-smi",
   "ps",
+  "du",
+  "wc",
+  "top",
 ]);
+
+// 特殊命令验证器
+const COMMAND_VALIDATORS: Record<
+  string,
+  (args: string[]) => ValidationResult
+> = {
+  top: (args) => {
+    // top 只允许 batch 模式（非交互式）
+    // 必须包含 -b（批处理）和 -n1（只执行一次）
+    let hasBatch = false;
+    let hasOnce = false;
+
+    for (const arg of args) {
+      // -b 或包含 b 的组合参数 (如 -bn1)
+      if (arg === "-b" || /^-[a-z]*b[a-z]*$/i.test(arg)) {
+        hasBatch = true;
+      }
+      // -n1 或 -n 1
+      if (arg === "-n1" || arg.match(/^-n1$/)) {
+        hasOnce = true;
+      }
+      // 组合形式 -bn1
+      if (arg.match(/^-bn1$/i)) {
+        hasBatch = true;
+        hasOnce = true;
+      }
+    }
+
+    // 检查 -n 后面是否跟着 1
+    for (let i = 0; i < args.length - 1; i++) {
+      if (args[i] === "-n" && args[i + 1] === "1") {
+        hasOnce = true;
+      }
+    }
+
+    if (!hasBatch || !hasOnce) {
+      return {
+        valid: false,
+        error:
+          "top 命令只允许非交互模式，必须使用 'top -bn1' 格式（-b 批处理，-n1 执行一次）",
+      };
+    }
+
+    return { valid: true };
+  },
+};
 
 // 危险字符/模式正则
 const DANGEROUS_PATTERNS: RegExp[] = [
@@ -53,6 +102,7 @@ export function validateCommand(command: string): ValidationResult {
   // 提取命令名（第一个空格之前的部分）
   const parts = trimmed.split(/\s+/);
   const cmd = parts[0];
+  const args = parts.slice(1);
 
   // 提取基本命令名（处理路径情况如 /usr/bin/ls）
   const baseName = path.basename(cmd);
@@ -62,6 +112,14 @@ export function validateCommand(command: string): ValidationResult {
       valid: false,
       error: `Command '${baseName}' is not in whitelist. Allowed: ${[...ALLOWED_COMMANDS].join(", ")}`,
     };
+  }
+
+  // 特殊命令验证
+  if (COMMAND_VALIDATORS[baseName]) {
+    const result = COMMAND_VALIDATORS[baseName](args);
+    if (!result.valid) {
+      return result;
+    }
   }
 
   return { valid: true };
