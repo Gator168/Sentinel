@@ -87,11 +87,20 @@ npm start
 | Tool | 描述 |
 |------|------|
 | `pm2_list` | 列出所有 PM2 进程 |
-| `pm2_start` | 创建并启动任务 |
+| `pm2_start` | 创建并启动任务（支持 `clear_logs` 参数清理旧日志） |
 | `pm2_stop` | 停止进程 |
 | `pm2_restart` | 重启进程 |
 | `pm2_delete` | 删除进程 |
 | `pm2_logs` | 获取进程日志 |
+| `pm2_grep` | 在日志中搜索匹配内容（支持正则和上下文） |
+| `pm2_health` | 检查进程健康状态 |
+| `pm2_metrics` | 从日志中提取训练指标 |
+
+### GPU 监控
+
+| Tool | 描述 |
+|------|------|
+| `gpu_status` | 获取 GPU 状态（显存、利用率、进程信息） |
 
 ### Shell 命令
 
@@ -101,8 +110,10 @@ npm start
 
 支持的命令白名单：
 ```
-ls, pwd, tree, cat, head, tail, df, free, nvidia-smi, ps
+ls, pwd, tree, cat, head, tail, df, free, nvidia-smi, ps, du, wc, top
 ```
+
+> 注：`top` 命令仅允许非交互模式 `top -bn1`
 
 ## 安全特性
 
